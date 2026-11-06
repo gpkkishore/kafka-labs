@@ -1,0 +1,16 @@
+# KiA 9.1.3 — Confluent REST Proxy: produce/consume over HTTP (for clients that can't speak the Kafka protocol).
+#   docker compose -f 09-admin-tools/docker-compose.rest-proxy.yml up -d     -> http://localhost:8082
+services:
+  rest-proxy:
+    image: confluentinc/cp-kafka-rest:7.7.1
+    container_name: rest-proxy
+    ports: ["8082:8082"]
+    environment:
+      KAFKA_REST_HOST_NAME: rest-proxy
+      KAFKA_REST_BOOTSTRAP_SERVERS: "kafka1:29092,kafka2:29092,kafka3:29092"
+      KAFKA_REST_LISTENERS: "http://0.0.0.0:8082"
+      KAFKA_REST_HEAP_OPTS: "-Xmx256m"
+networks:
+  default:
+    name: kafka-labs
+    external: true

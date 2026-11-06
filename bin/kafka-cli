@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Run any Kafka CLI tool inside a broker container.
+#   bin/kafka-cli kafka-topics --bootstrap-server kafka1:29092 --list
+#   BROKER=kafka2 bin/kafka-cli kafka-consumer-groups --bootstrap-server kafka1:29092 --list
+# KAFKA_OPTS is blanked so the CLI's JVM doesn't try to start a 2nd JMX agent on port 7071.
+# (Confluent images name the tools without the ".sh" suffix: kafka-topics, kafka-configs, ...)
+set -euo pipefail
+BROKER="${BROKER:-kafka1}"
+TTY_FLAG=""; [ -t 0 ] && [ -t 1 ] && TTY_FLAG="-t"
+exec docker exec -i $TTY_FLAG -e KAFKA_OPTS="" -e KAFKA_HEAP_OPTS="-Xmx256m" "$BROKER" "$@"

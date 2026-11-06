@@ -1,0 +1,5 @@
+-- 16-cdc-debezium-mysql: the Debezium connector user.
+-- REPLICATION SLAVE + REPLICATION CLIENT = read the binlog; SELECT + RELOAD + SHOW DATABASES = initial snapshot.
+CREATE USER IF NOT EXISTS 'debezium'@'%' IDENTIFIED BY 'dbz';
+GRANT SELECT, RELOAD, SHOW DATABASES, REPLICATION SLAVE, REPLICATION CLIENT, LOCK TABLES ON *.* TO 'debezium'@'%';
+FLUSH PRIVILEGES;

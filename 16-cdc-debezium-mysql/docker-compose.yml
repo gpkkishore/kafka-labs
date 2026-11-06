@@ -1,0 +1,32 @@
+# -----------------------------------------------------------------------------
+# 16-cdc-debezium-mysql
+#
+# Re-uses the Connect cluster + MySQL + Postgres from 15-kafka-connect (via `include`)
+# and adds Redis as a cache that is kept in sync from the CDC stream.
+#
+#   connect / connect-2  http://localhost:8083 / 8084   (Debezium connectors are pre-installed)
+#   mysql                localhost:3306   root/rootpw  — db "inventory" created by 00_setup_inventory.py
+#   postgres             localhost:5433   postgres/postgres — schema "replica" (JDBC sink target)
+#   redis                localhost:6379
+#
+# Requires the core cluster:  make up
+# Start:  docker compose -f 16-cdc-debezium-mysql/docker-compose.yml up -d --build
+# Stop:   docker compose -f 16-cdc-debezium-mysql/docker-compose.yml down -v
+# -----------------------------------------------------------------------------
+name: kafka-labs-connect          # same project name as 15 -> one stack, no duplicate containers
+
+include:
+  - ../15-kafka-connect/docker-compose.yml
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    hostname: redis
+    restart: unless-stopped
+    command: ["redis-server", "--maxmemory", "64mb", "--save", ""]
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 20

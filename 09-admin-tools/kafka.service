@@ -1,0 +1,24 @@
+# KiA 9.2 "Running Kafka as a systemd service" — example unit for a KRaft broker installed under /opt/kafka.
+# sudo cp kafka.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl enable --now kafka
+[Unit]
+Description=Apache Kafka broker (KRaft)
+Documentation=https://kafka.apache.org/documentation/
+Requires=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=kafka
+Group=kafka
+Environment="KAFKA_HEAP_OPTS=-Xms6g -Xmx6g"
+Environment="KAFKA_JMX_OPTS=-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Dcom.sun.management.jmxremote.port=9999"
+Environment="LOG_DIR=/var/log/kafka"
+ExecStart=/opt/kafka/bin/kafka-server-start.sh /opt/kafka/config/kraft/server.properties
+ExecStop=/opt/kafka/bin/kafka-server-stop.sh
+# give the broker time for a controlled shutdown (moves leadership away before exiting)
+TimeoutStopSec=180
+Restart=on-failure
+LimitNOFILE=100000
+
+[Install]
+WantedBy=multi-user.target

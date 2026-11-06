@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Shortcut for kafka-topics against the lab cluster:  bin/topics --list | --describe --topic x
+exec "$(dirname "$0")/kafka-cli" kafka-topics --bootstrap-server kafka1:29092 "$@"

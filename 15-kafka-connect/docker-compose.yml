@@ -1,0 +1,115 @@
+# -----------------------------------------------------------------------------
+# 15-kafka-connect (also the base for 16-cdc-debezium-mysql)
+#
+#   connect    http://localhost:8083   Connect worker #1 (REST API)   JMX metrics -> connect:7072
+#   connect-2  http://localhost:8084   Connect worker #2 (same group.id => one Connect CLUSTER)
+#   mysql      localhost:3306          root/rootpw  — db "shop" (JDBC source), binlog ROW (ready for Debezium)
+#   postgres   localhost:5433          postgres/postgres — db "warehouse" (JDBC sink target)
+#
+# Requires the core cluster:  make up   (network "kafka-labs")
+# Start:   docker compose -f 15-kafka-connect/docker-compose.yml up -d --build
+# Stop:    docker compose -f 15-kafka-connect/docker-compose.yml down -v
+# -----------------------------------------------------------------------------
+name: kafka-labs-connect
+
+x-connect: &connect
+  build: ./connect-image
+  image: kafka-labs/connect:2.7.3
+  restart: unless-stopped
+  depends_on:
+    mysql: {condition: service_healthy}
+  volumes:
+    - ./data:/data             # FileStream connectors read/write here (host: 15-kafka-connect/data)
+  healthcheck:
+    test: ["CMD", "curl", "-fs", "http://localhost:8083/connectors"]
+    interval: 10s
+    timeout: 5s
+    retries: 30
+
+x-connect-env: &connect-env
+  BOOTSTRAP_SERVERS: "kafka1:29092,kafka2:29092,kafka3:29092"
+  # --- distributed mode: all workers with the same GROUP_ID form ONE Connect cluster ---
+  GROUP_ID: "kafka-labs-connect"
+  CONFIG_STORAGE_TOPIC: "_connect_configs"     # connector configs   (compacted, 1 partition)
+  OFFSET_STORAGE_TOPIC: "_connect_offsets"     # source offsets      (compacted, 25 partitions)
+  STATUS_STORAGE_TOPIC: "_connect_status"      # connector/task state(compacted)
+  CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: "3"
+  CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: "3"
+  CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: "3"
+  # JSON with embedded schema by default; individual connectors override it
+  KEY_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
+  VALUE_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
+  CONNECT_KEY_CONVERTER_SCHEMAS_ENABLE: "true"
+  CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: "true"
+  OFFSET_FLUSH_INTERVAL_MS: "5000"                    # entrypoint maps this to offset.flush.interval.ms
+  CONNECT_SCHEDULED_REBALANCE_MAX_DELAY_MS: "15000"   # how long to wait for a lost worker before moving its tasks (default 5 min!)
+  CONNECT_CONNECTOR_CLIENT_CONFIG_OVERRIDE_POLICY: "All"
+  HEAP_OPTS: "-Xms256m -Xmx512m"
+  KAFKA_OPTS: "-javaagent:/kafka/jmx/jmx_prometheus_javaagent.jar=7072:/kafka/jmx/connect-jmx.yml"
+
+services:
+  connect:
+    <<: *connect
+    container_name: connect
+    hostname: connect
+    ports: ["8083:8083"]
+    environment:
+      <<: *connect-env
+      ADVERTISED_HOST_NAME: "connect"          # how the OTHER worker reaches this one (request forwarding)
+
+  connect-2:
+    <<: *connect
+    container_name: connect-2
+    hostname: connect-2
+    ports: ["8084:8083"]
+    environment:
+      <<: *connect-env
+      ADVERTISED_HOST_NAME: "connect-2"
+
+  mysql:
+    image: mysql:8.0
+    container_name: mysql
+    hostname: mysql
+    restart: unless-stopped
+    ports: ["3306:3306"]
+    command:
+      - --server-id=223344
+      - --log-bin=mysql-bin
+      - --binlog-format=ROW            # Debezium needs row-level events
+      - --binlog-row-image=FULL        # full "before" image on update/delete
+      - --gtid-mode=ON
+      - --enforce-gtid-consistency=ON
+      - --innodb-buffer-pool-size=64M
+      - --performance-schema=OFF
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpw
+      MYSQL_USER: app
+      MYSQL_PASSWORD: apppw
+    volumes:
+      - ./mysql-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-prootpw"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres
+    hostname: postgres
+    restart: unless-stopped
+    ports: ["5433:5432"]                # host 5433 (5432 is often taken by a local Postgres)
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: warehouse
+    volumes:
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 5s
+      retries: 30
+
+networks:
+  default:
+    name: kafka-labs
+    external: true

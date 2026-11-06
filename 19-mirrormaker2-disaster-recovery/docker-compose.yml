@@ -1,0 +1,52 @@
+# DR cluster + MirrorMaker 2 (dedicated mode).
+#   kafka-dr  : single-node KRaft cluster, host port 9292   (the "disaster recovery" site)
+#   mm2       : connect-mirror-maker replicating primary (core lab cluster) -> dr
+# Needs the core cluster:  make up   (this stack joins its docker network "kafka-labs")
+#   docker compose -f 19-mirrormaker2-disaster-recovery/docker-compose.yml up -d
+name: kafka-labs-dr
+
+services:
+  kafka-dr:
+    image: confluentinc/cp-kafka:7.7.1
+    container_name: kafka-dr
+    hostname: kafka-dr
+    ports: ["9292:9292"]
+    environment:
+      CLUSTER_ID: "DrClusterLab0000000001"
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: "broker,controller"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka-dr:29093"
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "INTERNAL"
+      KAFKA_LISTENERS: "INTERNAL://0.0.0.0:29092,CONTROLLER://0.0.0.0:29093,EXTERNAL://0.0.0.0:9292"
+      KAFKA_ADVERTISED_LISTENERS: "INTERNAL://kafka-dr:29092,EXTERNAL://localhost:9292"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"   # only MM2 should create topics here
+      KAFKA_HEAP_OPTS: "-Xms128m -Xmx384m"
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:29092 >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+
+  mm2:
+    image: confluentinc/cp-kafka:7.7.1
+    container_name: mm2
+    depends_on:
+      kafka-dr: {condition: service_healthy}
+    command: ["connect-mirror-maker", "/etc/mm2/mm2.properties"]
+    environment:
+      KAFKA_HEAP_OPTS: "-Xms128m -Xmx384m"
+      KAFKA_LOG4J_OPTS: "-Dlog4j.configuration=file:/etc/mm2/log4j.properties"
+    volumes:
+      - ./mm2.properties:/etc/mm2/mm2.properties:ro
+      - ./log4j.properties:/etc/mm2/log4j.properties:ro
+
+networks:
+  default:
+    name: kafka-labs
+    external: true

@@ -1,0 +1,50 @@
+# Standalone, SECURED single-broker cluster (does NOT touch the 3-broker lab cluster).
+#   host port 9192 : SASL_PLAINTEXT (PLAIN mechanism), users admin / alice / bob
+#   authorizer     : KRaft StandardAuthorizer, deny by default
+#
+#   docker compose -f 11-security-sasl-acls-quotas/docker-compose.yml up -d
+name: kafka-security
+
+services:
+  kafka-secure:
+    image: confluentinc/cp-kafka:7.7.1
+    container_name: kafka-secure
+    hostname: kafka-secure
+    ports: ["9192:9192"]
+    volumes:
+      - ./config:/etc/kafka/lab:ro
+    environment:
+      CLUSTER_ID: "secLab-Q1Sh9ISiazwGINzRvy"
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: "broker,controller"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka-secure:29193"
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_LISTENERS: "INTERNAL://0.0.0.0:29192,CONTROLLER://0.0.0.0:29193,EXTERNAL://0.0.0.0:9192"
+      KAFKA_ADVERTISED_LISTENERS: "INTERNAL://kafka-secure:29192,EXTERNAL://localhost:9192"
+      # Client/broker listeners require SASL; the controller listener stays internal-only PLAINTEXT
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "INTERNAL:SASL_PLAINTEXT,EXTERNAL:SASL_PLAINTEXT,CONTROLLER:PLAINTEXT"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "INTERNAL"
+      KAFKA_SASL_ENABLED_MECHANISMS: "PLAIN"
+      KAFKA_SASL_MECHANISM_INTER_BROKER_PROTOCOL: "PLAIN"
+      KAFKA_OPTS: "-Djava.security.auth.login.config=/etc/kafka/lab/kafka_server_jaas.conf"
+      # ---- Authorization ----
+      KAFKA_AUTHORIZER_CLASS_NAME: "org.apache.kafka.metadata.authorizer.StandardAuthorizer"
+      KAFKA_ALLOW_EVERYONE_IF_NO_ACL_FOUND: "false"          # deny by default
+      # admin = humans/ops. ANONYMOUS = the PLAINTEXT controller listener (node talking to itself).
+      KAFKA_SUPER_USERS: "User:admin;User:ANONYMOUS"
+      # ---- single node => replication factor 1 everywhere ----
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_HEAP_OPTS: "-Xms256m -Xmx384m"
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server kafka-secure:29192 --command-config /etc/kafka/lab/admin.properties >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 15s
+      retries: 12
+
+networks:
+  default:
+    name: kafka-security

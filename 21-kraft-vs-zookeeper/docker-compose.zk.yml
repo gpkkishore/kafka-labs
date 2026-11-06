@@ -1,0 +1,55 @@
+# A LEGACY ZooKeeper-mode cluster (1 ZooKeeper + 2 brokers) to compare with the KRaft core cluster.
+# Confluent Platform 7.7 = Kafka 3.7, the last line that still supports ZooKeeper mode (removed in Kafka 4.0).
+#   docker compose -f 21-kraft-vs-zookeeper/docker-compose.zk.yml up -d
+# Ports: ZooKeeper 2181, brokers localhost:9392 / localhost:9393. Own network "kafka-labs-zk".
+name: kafka-labs-zk
+
+x-broker: &broker
+  image: confluentinc/cp-kafka:7.7.1
+  depends_on: [zookeeper]
+
+x-broker-env: &broker-env
+  KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"          # <- the whole difference: metadata lives in ZK
+  KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT"
+  KAFKA_INTER_BROKER_LISTENER_NAME: "INTERNAL"
+  KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 2
+  KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 2
+  KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+  KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+  KAFKA_HEAP_OPTS: "-Xms128m -Xmx320m"
+
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.7.1
+    container_name: zookeeper
+    ports: ["2181:2181"]
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      KAFKA_HEAP_OPTS: "-Xms64m -Xmx192m"
+
+  zk-kafka1:
+    <<: *broker
+    container_name: zk-kafka1
+    hostname: zk-kafka1
+    ports: ["9392:9392"]
+    environment:
+      <<: *broker-env
+      KAFKA_BROKER_ID: 1
+      KAFKA_LISTENERS: "INTERNAL://0.0.0.0:29092,EXTERNAL://0.0.0.0:9392"
+      KAFKA_ADVERTISED_LISTENERS: "INTERNAL://zk-kafka1:29092,EXTERNAL://localhost:9392"
+
+  zk-kafka2:
+    <<: *broker
+    container_name: zk-kafka2
+    hostname: zk-kafka2
+    ports: ["9393:9393"]
+    environment:
+      <<: *broker-env
+      KAFKA_BROKER_ID: 2
+      KAFKA_LISTENERS: "INTERNAL://0.0.0.0:29092,EXTERNAL://0.0.0.0:9393"
+      KAFKA_ADVERTISED_LISTENERS: "INTERNAL://zk-kafka2:29092,EXTERNAL://localhost:9393"
+
+networks:
+  default:
+    name: kafka-labs-zk

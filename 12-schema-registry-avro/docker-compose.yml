@@ -1,0 +1,28 @@
+# Confluent Schema Registry on top of the lab cluster.  REST API: http://localhost:8081
+#   docker compose -f 12-schema-registry-avro/docker-compose.yml up -d
+# Schemas are stored in the compacted Kafka topic _schemas (the registry itself is stateless).
+name: kafka-labs-schema-registry
+
+services:
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.7.1
+    container_name: schema-registry
+    hostname: schema-registry
+    ports: ["8081:8081"]
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: "kafka1:29092,kafka2:29092,kafka3:29092"
+      SCHEMA_REGISTRY_KAFKASTORE_TOPIC: _schemas
+      SCHEMA_REGISTRY_SCHEMA_COMPATIBILITY_LEVEL: BACKWARD     # the default, made explicit
+      SCHEMA_REGISTRY_HEAP_OPTS: "-Xms128m -Xmx256m"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:8081/subjects >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+networks:
+  default:
+    name: kafka-labs
+    external: true

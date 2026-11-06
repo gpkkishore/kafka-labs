@@ -1,0 +1,95 @@
+# Prometheus JMX exporter rules for Kafka brokers.
+# Only a curated subset of MBeans is exported (keeps scrape fast & names readable).
+# Order matters: the first matching rule wins.
+lowercaseOutputName: true
+lowercaseOutputLabelNames: true
+whitelistObjectNames:
+  - "kafka.server:type=BrokerTopicMetrics,*"
+  - "kafka.server:type=ReplicaManager,*"
+  - "kafka.server:type=KafkaRequestHandlerPool,*"
+  - "kafka.server:type=raft-metrics,*"
+  - "kafka.controller:type=KafkaController,*"
+  - "kafka.controller:type=ControllerStats,*"
+  - "kafka.network:type=RequestMetrics,name=RequestsPerSec,*"
+  - "kafka.network:type=RequestMetrics,name=TotalTimeMs,*"
+  - "kafka.network:type=SocketServer,*"
+  - "kafka.log:type=Log,*"
+  - "kafka.log:type=LogFlushStats,*"
+  - "kafka.coordinator.group:type=GroupMetadataManager,*"
+  - "java.lang:type=Memory"
+  - "java.lang:type=GarbageCollector,*"
+rules:
+  # ---- Throughput per topic: messages / bytes in & out (counters -> use rate()) ----
+  - pattern: 'kafka.server<type=BrokerTopicMetrics, name=(\w+), topic=(.+)><>Count'
+    name: kafka_server_brokertopicmetrics_$1_total
+    type: COUNTER
+    labels: {topic: "$2"}
+  - pattern: 'kafka.server<type=BrokerTopicMetrics, name=(\w+)><>Count'
+    name: kafka_server_brokertopicmetrics_$1_total
+    type: COUNTER
+
+  # ---- Replication health ----
+  - pattern: 'kafka.server<type=ReplicaManager, name=(\w+)><>Count'          # IsrShrinksPerSec / IsrExpandsPerSec
+    name: kafka_server_replicamanager_$1_total
+    type: COUNTER
+  - pattern: 'kafka.server<type=ReplicaManager, name=(\w+)><>Value'          # UnderReplicatedPartitions, LeaderCount, PartitionCount, ...
+    name: kafka_server_replicamanager_$1
+    type: GAUGE
+
+  - pattern: 'kafka.server<type=KafkaRequestHandlerPool, name=RequestHandlerAvgIdlePercent><>OneMinuteRate'
+    name: kafka_server_request_handler_avg_idle_ratio
+    type: GAUGE
+
+  # ---- KRaft (raft-metrics) ----
+  - pattern: 'kafka.server<type=raft-metrics><>(current-leader|current-epoch|high-watermark|commit-latency-avg)'
+    name: kafka_raft_$1
+    type: GAUGE
+
+  # ---- Controller ----
+  - pattern: 'kafka.controller<type=KafkaController, name=(\w+)><>Value'      # ActiveControllerCount, OfflinePartitionsCount, GlobalPartitionCount...
+    name: kafka_controller_$1
+    type: GAUGE
+  - pattern: 'kafka.controller<type=ControllerStats, name=(\w+)><>Count'
+    name: kafka_controller_stats_$1_total
+    type: COUNTER
+
+  # ---- Requests ----
+  - pattern: 'kafka.network<type=RequestMetrics, name=RequestsPerSec, request=(\w+), version=(\d+)><>Count'
+    name: kafka_network_requests_total
+    type: COUNTER
+    labels: {request: "$1", version: "$2"}
+  - pattern: 'kafka.network<type=RequestMetrics, name=TotalTimeMs, request=(Produce|FetchConsumer|FetchFollower|Metadata|OffsetCommit|JoinGroup|SyncGroup|Heartbeat)><>(Mean|99thPercentile)'
+    name: kafka_network_request_total_time_ms
+    type: GAUGE
+    labels: {request: "$1", stat: "$2"}
+  - pattern: 'kafka.network<type=SocketServer, name=NetworkProcessorAvgIdlePercent><>Value'
+    name: kafka_network_processor_avg_idle_ratio
+    type: GAUGE
+
+  # ---- Log / partition internals (size, start/end offsets, number of segments) ----
+  - pattern: 'kafka.log<type=Log, name=(\w+), topic=(.+), partition=(\d+)><>Value'
+    name: kafka_log_$1
+    type: GAUGE
+    labels: {topic: "$2", partition: "$3"}
+  - pattern: 'kafka.log<type=LogFlushStats, name=LogFlushRateAndTimeMs><>Count'
+    name: kafka_log_flushes_total
+    type: COUNTER
+
+  # ---- Consumer group coordinator ----
+  - pattern: 'kafka.coordinator.group<type=GroupMetadataManager, name=(\w+)><>Value'   # NumGroups, NumGroupsStable, NumGroupsPreparingRebalance...
+    name: kafka_coordinator_group_$1
+    type: GAUGE
+
+  # ---- JVM ----
+  - pattern: 'java.lang<type=Memory><HeapMemoryUsage>(used|max|committed)'
+    name: jvm_heap_bytes
+    type: GAUGE
+    labels: {kind: "$1"}
+  - pattern: 'java.lang<type=GarbageCollector, name=(.+)><>CollectionTime'
+    name: jvm_gc_collection_time_ms_total
+    type: COUNTER
+    labels: {gc: "$1"}
+  - pattern: 'java.lang<type=GarbageCollector, name=(.+)><>CollectionCount'
+    name: jvm_gc_collections_total
+    type: COUNTER
+    labels: {gc: "$1"}

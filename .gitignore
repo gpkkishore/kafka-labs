@@ -1,0 +1,24 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+
+# Lab runtime artefacts
+acked.log
+*.pid
+**/.object-store/
+11-security-sasl-acls-quotas/certs/
+15-kafka-connect/data/*.txt
+!15-kafka-connect/data/.gitkeep
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Never commit the books or secrets
+*.pdf
+.env

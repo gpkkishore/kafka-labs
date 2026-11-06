@@ -1,0 +1,8 @@
+confluent-kafka[avro,schemaregistry]>=2.6.0   # librdkafka-based client: Producer, Consumer, AdminClient, Schema Registry
+requests>=2.31          # Kafka Connect / Schema Registry / REST Proxy REST APIs
+redis>=5.0              # 16-cdc: MySQL -> Kafka -> Redis cache
+PyMySQL>=1.1            # 16-cdc: generate DB changes
+Faker>=25.0             # realistic fake data
+pytest>=8.0             # 18-testing
+testcontainers[kafka]>=4.8   # 18-testing: throwaway Kafka in Docker for tests
+prometheus-client>=0.20  # 10-monitoring: expose Python client metrics to Prometheus

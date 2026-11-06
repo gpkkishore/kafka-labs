@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# kcat (formerly kafkacat) in a container, already pointed at the lab cluster (amd64 image, emulated on Apple Silicon).
+#   bin/kcat -L                         # metadata: brokers, topics, leaders
+#   bin/kcat -C -t orders -f '%p %o %k %s\n' -e
+exec docker run --rm -i --platform linux/amd64 --network kafka-labs edenhill/kcat:1.7.1 -b kafka1:29092,kafka2:29092,kafka3:29092 "$@"

@@ -1,0 +1,12 @@
+{
+  "type": "record",
+  "name": "Order",
+  "namespace": "kinaction.orders",
+  "doc": "An order placed in the web shop (version 1)",
+  "fields": [
+    {"name": "order_id",  "type": "string"},
+    {"name": "customer",  "type": "string"},
+    {"name": "amount",    "type": "double", "doc": "total in USD"},
+    {"name": "created_at","type": {"type": "long", "logicalType": "timestamp-millis"}}
+  ]
+}

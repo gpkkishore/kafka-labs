@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Shortcut for kafka-consumer-groups:  bin/groups --list | --describe --group g1 [--members --verbose]
+exec "$(dirname "$0")/kafka-cli" kafka-consumer-groups --bootstrap-server kafka1:29092 "$@"

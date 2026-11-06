@@ -1,0 +1,41 @@
+# ksqlDB server + CLI against the lab cluster.  REST: http://localhost:8088
+#   docker compose -f 14-stream-processing-ksqldb/ksqldb/docker-compose.yml up -d
+#   docker exec -it ksqldb-cli ksql http://ksqldb-server:8088
+name: kafka-labs-ksqldb
+
+services:
+  ksqldb-server:
+    image: confluentinc/cp-ksqldb-server:7.7.1
+    container_name: ksqldb-server
+    hostname: ksqldb-server
+    ports: ["8088:8088"]
+    environment:
+      KSQL_LISTENERS: http://0.0.0.0:8088
+      KSQL_BOOTSTRAP_SERVERS: "kafka1:29092,kafka2:29092,kafka3:29092"
+      KSQL_KSQL_SERVICE_ID: kafka_labs_
+      KSQL_KSQL_LOGGING_PROCESSING_STREAM_AUTO_CREATE: "true"
+      KSQL_KSQL_LOGGING_PROCESSING_TOPIC_AUTO_CREATE: "true"
+      KSQL_KSQL_STREAMS_AUTO_OFFSET_RESET: earliest
+      KSQL_KSQL_STREAMS_CACHE_MAX_BYTES_BUFFERING: 0          # emit every update immediately (nicer demos)
+      KSQL_KSQL_STREAMS_COMMIT_INTERVAL_MS: 2000
+      KSQL_KSQL_SCHEMA_REGISTRY_URL: http://schema-registry:8081   # only needed for AVRO/PROTOBUF formats
+      KSQL_HEAP_OPTS: "-Xms256m -Xmx512m"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:8088/info >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+
+  ksqldb-cli:
+    image: confluentinc/cp-ksqldb-cli:7.7.1
+    container_name: ksqldb-cli
+    depends_on: [ksqldb-server]
+    entrypoint: /bin/sh
+    tty: true
+    volumes:
+      - ./:/ksql:ro
+
+networks:
+  default:
+    name: kafka-labs
+    external: true

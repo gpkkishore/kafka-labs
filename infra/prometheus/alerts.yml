@@ -1,0 +1,33 @@
+# Classic Kafka alerts. See them firing at http://localhost:9090/alerts
+groups:
+  - name: kafka
+    rules:
+      - alert: KafkaBrokerDown
+        expr: up{job="kafka-brokers"} == 0
+        for: 15s
+        labels: {severity: critical}
+        annotations: {summary: "Broker {{ $labels.broker }} is not being scraped (down?)"}
+
+      - alert: KafkaUnderReplicatedPartitions
+        expr: sum(kafka_server_replicamanager_underreplicatedpartitions) > 0
+        for: 15s
+        labels: {severity: warning}
+        annotations: {summary: "{{ $value }} partitions are under-replicated (a follower is out of ISR)"}
+
+      - alert: KafkaOfflinePartitions
+        expr: max(kafka_controller_offlinepartitionscount) > 0
+        for: 5s
+        labels: {severity: critical}
+        annotations: {summary: "{{ $value }} partitions have NO leader — producers/consumers are blocked"}
+
+      - alert: KafkaNoActiveController
+        expr: sum(kafka_controller_activecontrollercount) != 1
+        for: 30s
+        labels: {severity: critical}
+        annotations: {summary: "Active controller count is {{ $value }} (must be exactly 1)"}
+
+      - alert: KafkaConsumerLagHigh
+        expr: sum by (consumergroup, topic) (kafka_consumergroup_lag) > 1000
+        for: 30s
+        labels: {severity: warning}
+        annotations: {summary: "Group {{ $labels.consumergroup }} is {{ $value }} messages behind on {{ $labels.topic }}"}

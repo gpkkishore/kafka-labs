@@ -1,0 +1,39 @@
+# JMX exporter rules for Kafka Connect workers (scraped by Prometheus job "kafka-connect" at connect:7072)
+lowercaseOutputName: true
+lowercaseOutputLabelNames: true
+rules:
+  # worker level: connector-count, task-count, connector-startup-failure-total, ...
+  - pattern: 'kafka.connect<type=connect-worker-metrics><>([a-z-]+)'
+    name: kafka_connect_worker_$1
+    type: GAUGE
+  # rebalances inside the Connect cluster
+  - pattern: 'kafka.connect<type=connect-worker-rebalance-metrics><>([a-z-]+)'
+    name: kafka_connect_worker_rebalance_$1
+    type: GAUGE
+  # per connector status: running / paused / failed
+  - pattern: 'kafka.connect<type=connector-metrics, connector=([^>]+)><>status: ([a-z-]+)'
+    name: kafka_connect_connector_status
+    type: GAUGE
+    value: 1
+    labels: {connector: "$1", status: "$2"}
+  # per task status
+  - pattern: 'kafka.connect<type=connector-task-metrics, connector=([^,]+), task=(\d+)><>status: ([a-z-]+)'
+    name: kafka_connect_task_status
+    type: GAUGE
+    value: 1
+    labels: {connector: "$1", task: "$2", status: "$3"}
+  # source/sink task throughput
+  - pattern: 'kafka.connect<type=(source|sink)-task-metrics, connector=([^,]+), task=(\d+)><>([a-z-]+)'
+    name: kafka_connect_$1_task_$4
+    type: GAUGE
+    labels: {connector: "$2", task: "$3"}
+  # error handling / DLQ counters
+  - pattern: 'kafka.connect<type=task-error-metrics, connector=([^,]+), task=(\d+)><>([a-z-]+)'
+    name: kafka_connect_task_error_$3
+    type: GAUGE
+    labels: {connector: "$1", task: "$2"}
+  # Debezium streaming / snapshot metrics (16-cdc-debezium-mysql)
+  - pattern: 'debezium.([^:]+)<type=connector-metrics, context=([^,]+), server=([^,>]+)(?:, [^>]+)?><>(MilliSecondsBehindSource|TotalNumberOfEventsSeen|NumberOfCommittedTransactions|Connected|SnapshotRunning|SnapshotCompleted|RemainingTableCount|MilliSecondsSinceLastEvent)'
+    name: debezium_$2_$4
+    type: GAUGE
+    labels: {plugin: "$1", server: "$3"}

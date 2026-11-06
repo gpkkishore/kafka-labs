@@ -1,0 +1,166 @@
+# -----------------------------------------------------------------------------
+# Core lab infrastructure — used by almost every chapter folder.
+#
+#   3 x Kafka brokers (KRaft mode, no ZooKeeper; each node is broker+controller)
+#   kafka-ui          http://localhost:8080   (browse topics / partitions / groups)
+#   prometheus        http://localhost:9090
+#   grafana           http://localhost:3000   (anonymous admin, dashboard "Kafka Labs")
+#   kafka-exporter    consumer-group lag + topic offsets as Prometheus metrics
+#   JMX exporter      java agent inside every broker -> :7071/metrics
+#
+# Start:  docker compose -f infra/docker-compose.yml up -d     (or: make up)
+# Other example folders attach to the docker network "kafka-labs".
+# -----------------------------------------------------------------------------
+name: kafka-labs
+
+x-kafka-common: &kafka-common
+  image: confluentinc/cp-kafka:7.7.1          # Apache Kafka 3.7.x
+  restart: unless-stopped
+  depends_on:
+    jmx-agent-download:
+      condition: service_completed_successfully
+  volumes:
+    - jmx-agent:/jmx-agent:ro
+    - ./jmx-exporter/kafka-broker.yml:/jmx-config/kafka-broker.yml:ro
+  healthcheck:
+    test: ["CMD-SHELL", "KAFKA_OPTS= kafka-broker-api-versions --bootstrap-server localhost:29092 >/dev/null 2>&1"]
+    interval: 10s
+    timeout: 10s
+    retries: 12
+
+x-kafka-env: &kafka-env
+  CLUSTER_ID: "q1Sh-9_ISia_zwGINzRvyQ"                # same id on every node of the cluster
+  KAFKA_PROCESS_ROLES: "broker,controller"           # "combined" mode — fine for labs
+  KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka1:29093,2@kafka2:29093,3@kafka3:29093"
+  KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+  KAFKA_INTER_BROKER_LISTENER_NAME: "INTERNAL"
+  KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT"
+  KAFKA_LOG_DIRS: "/var/lib/kafka/data"
+  KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+  KAFKA_MIN_INSYNC_REPLICAS: 2
+  KAFKA_NUM_PARTITIONS: 3
+  KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+  KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+  KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+  KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0          # don't wait 3s before the first rebalance (nicer demos)
+  KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+  KAFKA_LOG_CLEANER_BACKOFF_MS: 5000                 # run the compaction thread often (compaction demo)
+  KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS: 10000       # check retention every 10s (retention demo)
+  KAFKA_HEAP_OPTS: "-Xms256m -Xmx512m"
+  # JMX -> Prometheus. NOTE: every Kafka CLI inside the container also reads KAFKA_OPTS,
+  # so use bin/kafka-cli (it blanks KAFKA_OPTS) to avoid "port 7071 already in use".
+  KAFKA_OPTS: "-javaagent:/jmx-agent/jmx_prometheus_javaagent.jar=7071:/jmx-config/kafka-broker.yml"
+
+services:
+  # Downloads the Prometheus JMX java agent once into a shared volume.
+  jmx-agent-download:
+    image: curlimages/curl:8.10.1
+    user: "0"
+    entrypoint: ["sh", "-c"]
+    command:
+      - >-
+        test -s /jmx-agent/jmx_prometheus_javaagent.jar ||
+        curl -fsSL -o /jmx-agent/jmx_prometheus_javaagent.jar
+        https://repo1.maven.org/maven2/io/prometheus/jmx/jmx_prometheus_javaagent/1.0.1/jmx_prometheus_javaagent-1.0.1.jar
+    volumes:
+      - jmx-agent:/jmx-agent
+
+  kafka1:
+    <<: *kafka-common
+    container_name: kafka1
+    hostname: kafka1
+    ports: ["9092:9092"]
+    environment:
+      <<: *kafka-env
+      KAFKA_NODE_ID: 1
+      KAFKA_LISTENERS: "INTERNAL://0.0.0.0:29092,CONTROLLER://0.0.0.0:29093,EXTERNAL://0.0.0.0:9092"
+      KAFKA_ADVERTISED_LISTENERS: "INTERNAL://kafka1:29092,EXTERNAL://localhost:9092"
+      KAFKA_BROKER_RACK: "rack-a"
+
+  kafka2:
+    <<: *kafka-common
+    container_name: kafka2
+    hostname: kafka2
+    ports: ["9093:9093"]
+    environment:
+      <<: *kafka-env
+      KAFKA_NODE_ID: 2
+      KAFKA_LISTENERS: "INTERNAL://0.0.0.0:29092,CONTROLLER://0.0.0.0:29093,EXTERNAL://0.0.0.0:9093"
+      KAFKA_ADVERTISED_LISTENERS: "INTERNAL://kafka2:29092,EXTERNAL://localhost:9093"
+      KAFKA_BROKER_RACK: "rack-b"
+
+  kafka3:
+    <<: *kafka-common
+    container_name: kafka3
+    hostname: kafka3
+    ports: ["9094:9094"]
+    environment:
+      <<: *kafka-env
+      KAFKA_NODE_ID: 3
+      KAFKA_LISTENERS: "INTERNAL://0.0.0.0:29092,CONTROLLER://0.0.0.0:29093,EXTERNAL://0.0.0.0:9094"
+      KAFKA_ADVERTISED_LISTENERS: "INTERNAL://kafka3:29092,EXTERNAL://localhost:9094"
+      KAFKA_BROKER_RACK: "rack-c"
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:v0.7.2
+    container_name: kafka-ui
+    restart: unless-stopped
+    ports: ["8080:8080"]
+    depends_on: [kafka1, kafka2, kafka3]
+    environment:
+      KAFKA_CLUSTERS_0_NAME: kafka-labs
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: "kafka1:29092,kafka2:29092,kafka3:29092"
+      # Optional components from other folders (UI just shows them as offline if not running)
+      KAFKA_CLUSTERS_0_SCHEMAREGISTRY: "http://schema-registry:8081"
+      KAFKA_CLUSTERS_0_KAFKACONNECT_0_NAME: connect
+      KAFKA_CLUSTERS_0_KAFKACONNECT_0_ADDRESS: "http://connect:8083"
+      DYNAMIC_CONFIG_ENABLED: "true"
+
+  kafka-exporter:
+    image: danielqsj/kafka-exporter:v1.8.0
+    container_name: kafka-exporter
+    restart: unless-stopped
+    command:
+      - --kafka.server=kafka1:29092
+      - --kafka.server=kafka2:29092
+      - --kafka.server=kafka3:29092
+      - --topic.filter=^[^_].*        # skip internal topics (__consumer_offsets, ...)
+      - --group.filter=.*
+    ports: ["9308:9308"]
+    depends_on:
+      kafka1: {condition: service_healthy}
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: prometheus
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=2d
+      - --web.enable-lifecycle
+    ports: ["9090:9090"]
+    extra_hosts: ["host.docker.internal:host-gateway"]   # lets Prometheus scrape Python apps on your laptop (Linux too)
+    volumes:
+      - ./prometheus:/etc/prometheus:ro
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    container_name: grafana
+    restart: unless-stopped
+    ports: ["3000:3000"]
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/kafka-labs.json
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on: [prometheus]
+
+volumes:
+  jmx-agent:
+
+networks:
+  default:
+    name: kafka-labs

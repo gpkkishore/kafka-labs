@@ -12,6 +12,18 @@
                                                                                             ▼
                                          Prometheus :9090 (scrape every 5s, alert rules) ──▶ Grafana :3000
 ```
+
+<!-- mermaid: JMX MBeans -->
+```mermaid
+flowchart LR
+    K["kafka1/2/3<br/>JMX MBeans"] --> JA["jmx_prometheus_javaagent<br/>in each broker JVM :7071/metrics"]
+    KE["kafka-exporter<br/>offsets, lag, ISR via Kafka protocol"] --> KEM[":9308/metrics"]
+    APP["your Python apps<br/>librdkafka stats_cb"] --> PC["prometheus_client :8000/metrics"]
+    CN["Connect workers (15/16)"] --> CJ["JMX agent :7072/metrics"]
+    JA & KEM & PC & CJ --> P[("Prometheus :9090<br/>scrape every 5s<br/>alert rules")]
+    P --> G["Grafana :3000<br/>Kafka Labs dashboards"]
+    P --> AL["Alerts<br/>broker down, URP, offline,<br/>no controller, lag"]
+```
 | File | Purpose |
 |---|---|
 | `infra/jmx-exporter/kafka-broker.yml` | which MBeans become which Prometheus metrics (curated, commented) |

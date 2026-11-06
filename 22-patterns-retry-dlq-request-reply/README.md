@@ -22,6 +22,21 @@ patterns.orders.retry-5s ─▶ retry-15s ─(still failing)─▶ patterns.orde
                                                          headers: error, error.class, attempts,
                                                                   original.topic/partition/offset
 ```
+
+<!-- mermaid: patterns.orders ─▶ main consumer -->
+```mermaid
+flowchart LR
+    IN[["patterns.orders"]] --> MC["main consumer"]
+    MC -- success --> OK(["done"])
+    MC -- "transient error<br/>(503, timeout, deadlock)" --> R5[["patterns.orders.retry-5s"]]
+    R5 --> RC5["retry consumer, waits 5s"]
+    RC5 -- success --> OK
+    RC5 -- "still failing" --> R15[["patterns.orders.retry-15s"]]
+    R15 --> RC15["retry consumer, waits 15s"]
+    RC15 -- success --> OK
+    RC15 -- "still failing" --> DLQ[["patterns.orders.dlq<br/>headers: error, error.class, attempts,<br/>original.topic/partition/offset"]]
+    MC -- "poison message<br/>(bad JSON, schema, business rule)" --> DLQ
+```
 Real output:
 ```
   ✘ o2 -> DLQ (not JSON ...)                         poison: straight to DLQ, no retries

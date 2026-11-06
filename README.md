@@ -26,6 +26,44 @@ while **Prometheus + Grafana** show the cluster's health live.
       standalone: SASL/ACL broker :9192 · ZooKeeper-mode cluster :9392 (+ZK :2181)
 ```
 
+<!-- mermaid: core (make up) -->
+```mermaid
+flowchart LR
+    PY["Your Python scripts<br/>(localhost:9092-9094)"]
+    subgraph CORE["core stack - make up (docker network kafka-labs)"]
+        direction TB
+        subgraph KC["Kafka cluster (KRaft, RF=3)"]
+            K1["kafka1 :9092<br/>rack-a"]
+            K2["kafka2 :9093<br/>rack-b"]
+            K3["kafka3 :9094<br/>rack-c"]
+        end
+        UI["Kafka UI :8080"]
+        EXP["kafka-exporter :9308"]
+        PROM["Prometheus :9090"]
+        GRAF["Grafana :3000"]
+    end
+    subgraph OPT["optional stacks (same network)"]
+        SR["Schema Registry :8081"]
+        KSQL["ksqlDB :8088"]
+        REST["REST Proxy :8082"]
+        CON["Connect :8083/:8084"]
+        DB[("MySQL :3306<br/>Postgres :5433<br/>Redis :6379")]
+        FL["Flink :8085"]
+        DR["DR cluster + MirrorMaker 2 :9292"]
+    end
+    subgraph SA["standalone (own network)"]
+        SEC["SASL/ACL broker :9192"]
+        ZK["ZooKeeper-mode cluster :9392 + ZK :2181"]
+    end
+    PY --> KC
+    UI --> KC
+    EXP --> KC
+    KC -- "JMX :7071" --> PROM
+    EXP --> PROM
+    PROM --> GRAF
+    OPT --> KC
+```
+
 ## Learning path
 
 | # | Folder | You learn | KiA | DG | AKiA |

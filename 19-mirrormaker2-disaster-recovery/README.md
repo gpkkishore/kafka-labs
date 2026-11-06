@@ -14,6 +14,34 @@
                                      (mm2 container)    └────────────────────────────────────┘
 ```
 
+<!-- mermaid: PRIMARY (core lab cluster -->
+```mermaid
+flowchart LR
+    subgraph PRI["PRIMARY: core lab cluster (3 brokers)"]
+        PO[["mm2-orders (3 partitions)"]]
+        PC[["__consumer_offsets<br/>group mm2-billing"]]
+        OS[["mm2-offset-syncs.dr.internal"]]
+    end
+    subgraph MM2["mm2 container (MirrorMaker 2)"]
+        MS["MirrorSourceConnector"]
+        MC["MirrorCheckpointConnector"]
+        MH["MirrorHeartbeatConnector"]
+    end
+    subgraph DRC["DR: kafka-dr, 1 broker, localhost:9292"]
+        DO[["primary.mm2-orders (data)"]]
+        DC[["primary.checkpoints.internal"]]
+        DG[["__consumer_offsets (synced groups)"]]
+        DH[["heartbeats / primary.heartbeats"]]
+        DI[["mm2-configs / offsets / status"]]
+    end
+    PO --> MS --> DO
+    MS -- "offset-syncs" --> OS
+    PC --> MC --> DC
+    MC --> DG
+    MH --> DH
+    MM2 --> DI
+```
+
 ## Files
 
 | File | Purpose |

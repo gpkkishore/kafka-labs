@@ -16,6 +16,26 @@ your code ──produce(k,v)──▶ serializer ──▶ partitioner ──▶
                       on_delivery(err, msg) ◀── response (offset, timestamp)  — delivered via poll()/flush()
 ```
 
+<!-- mermaid: your code ──produce -->
+```mermaid
+sequenceDiagram
+    autonumber
+    participant App as Your code
+    participant Lib as Producer library<br/>(serializer, partitioner, batches)
+    participant L as Partition leader (broker)
+    participant F as Followers (ISR)
+    App->>Lib: produce(key, value, on_delivery)
+    Note over Lib: serialize, pick partition (murmur2(key) % N),<br/>append to per-partition batch
+    Note over Lib: wait until batch.size full or linger.ms elapsed
+    Lib->>L: ProduceRequest (batch, acks)
+    L->>L: append to active segment (page cache)
+    F->>L: Fetch (followers pull new data)
+    L-->>F: records
+    Note over L,F: acks=all: wait until every ISR replica has it<br/>then the high watermark moves
+    L-->>Lib: ProduceResponse (offset, timestamp)
+    Lib-->>App: on_delivery(err, msg) during poll() / flush()
+```
+
 ## Scripts (run from repo root, cluster up: `make up`)
 
 | # | Script | Book § | What you learn |

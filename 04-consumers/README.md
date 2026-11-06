@@ -64,3 +64,19 @@ at-most-once : commit → process        crash in between = LOSS
 at-least-once: process → commit        crash in between = DUPLICATE   (make processing idempotent!)
 exactly-once : read_committed + transactions (consume-transform-produce)  → folder 13
 ```
+
+<!-- mermaid: at-most-once : commit -->
+```mermaid
+flowchart LR
+    subgraph AMO["at-most-once"]
+        a1[poll] --> a2[commit] --> a3[process]
+        a2 -. "crash here" .-> aL(["record LOST"])
+    end
+    subgraph ALO["at-least-once (default choice)"]
+        b1[poll] --> b2[process] --> b3[commit]
+        b2 -. "crash here" .-> bD(["record processed TWICE"])
+    end
+    subgraph EOS["exactly-once (folder 13)"]
+        c1["poll<br/>read_committed"] --> c2["process + produce<br/>in a transaction"] --> c3["send_offsets_to_transaction<br/>+ commit_transaction"]
+    end
+```

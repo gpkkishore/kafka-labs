@@ -11,6 +11,22 @@ partition 0  replicas=[1,2,3]                       LEO = log end offset (next o
  broker2 (follower) [0][1][2][3][4][5]     LEO=6          consumers can only read below the HW
  broker3 (follower) [0][1][2][3][4]        LEO=5    →  HW=5: offsets 5,6 are not yet "committed"
 ```
+
+<!-- mermaid: LEO = log end offset -->
+```mermaid
+flowchart LR
+    subgraph P0["partition 0, replicas 1,2,3"]
+        direction TB
+        L["broker1 leader<br/>offsets 0..6, LEO=7"]
+        F2["broker2 follower<br/>offsets 0..5, LEO=6"]
+        F3["broker3 follower<br/>offsets 0..4, LEO=5"]
+    end
+    F2 -- "Fetch (pull)" --> L
+    F3 -- "Fetch (pull)" --> L
+    HW{{"High watermark = min LEO over ISR = 5<br/>consumers read offsets below 5 only<br/>offsets 5 and 6 are not committed yet"}}
+    L --> HW
+    F3 --> HW
+```
 * **Followers pull** (Fetch requests, like consumers) from the leader. A follower that hasn't caught up within
   `replica.lag.time.max.ms` (30s) is removed from the **ISR**.
 * `acks=all` = the leader waits until every *ISR* replica has the record. If ISR size < `min.insync.replicas`

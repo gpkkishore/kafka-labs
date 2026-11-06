@@ -37,6 +37,24 @@
                         └────────────────────────────────────────────────────────┘
 ```
 
+<!-- mermaid: one stream-processing instance -->
+```mermaid
+flowchart LR
+    IN[["sp_pageviews<br/>3 partitions = 3 tasks"]]
+    subgraph INST["one stream-processing instance"]
+        F["01 filter, map"]
+        W["02 window 10s + grace, count"] --> S1[("state store")]
+        J["03 join"]
+        AG["04 aggregate"] --> S2[("state store")]
+        T[["table sp_users (global)"]] --> J
+    end
+    IN --> F & W & J & AG
+    F --> O1[["sp_purchases"]]
+    S1 --> O2[["sp_pageviews_per_page_windowed"]]
+    J --> O3[["sp_pageviews_enriched"]]
+    S2 <--> O4[["sp-user-activity-store-changelog"]]
+```
+
 ## Run the Python processors
 Terminal 1 – input data (keeps running):
 ```bash

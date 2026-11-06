@@ -20,6 +20,27 @@
  commit_transaction() ─▶ coordinator writes PREPARE_COMMIT, then COMMIT *control records* (markers)
                          into every partition touched  ─▶ read_committed consumers may now read up to them
 ```
+
+<!-- mermaid: Transaction Coordinator -->
+```mermaid
+sequenceDiagram
+    participant App as Transactional producer
+    participant TC as Transaction coordinator<br/>(state in __transaction_state)
+    participant A as topicA p0 / topicB p2
+    participant O as __consumer_offsets
+    participant RC as read_committed consumer
+    App->>TC: init_transactions(transactional.id)
+    TC-->>App: PID + epoch (epoch bump fences zombies)
+    App->>App: begin_transaction()
+    App->>A: produce records (written now, flagged isTransactional)
+    App->>TC: send_offsets_to_transaction(consumer offsets)
+    TC->>O: offsets become part of the transaction
+    App->>TC: commit_transaction()
+    TC->>TC: PREPARE_COMMIT
+    TC->>A: write COMMIT control records (markers)
+    TC->>O: write COMMIT marker
+    RC->>A: fetch, can now read up to the markers (LSO)
+```
 * **Idempotent producer** (03-producers/05) removes duplicates caused by *retries*.
 * **Transactions** make writes to many partitions + the consumer offsets **atomic**.
 * **read_committed** consumers only read up to the *Last Stable Offset* (LSO) and skip aborted records.

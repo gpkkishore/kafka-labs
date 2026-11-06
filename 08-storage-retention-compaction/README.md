@@ -19,6 +19,17 @@ segments:  [0..16] [17..33] [34..50] [51..60 ACTIVE]
             ^ deletable when CLOSED and its newest record is older than retention.ms
               (or the partition is bigger than retention.bytes)
 ```
+
+<!-- mermaid: segments:  [0..16] -->
+```mermaid
+flowchart LR
+    S0["segment 0..16<br/>CLOSED"]:::old --> S1["segment 17..33<br/>CLOSED"]:::old --> S2["segment 34..50<br/>CLOSED"] --> S3["segment 51..60<br/>ACTIVE"]:::active
+    R{{"retention check every log.retention.check.interval.ms:<br/>delete a CLOSED segment when its newest record is older than retention.ms<br/>or the partition is bigger than retention.bytes"}}
+    R -. deletes .-> S0
+    R -. deletes .-> S1
+    classDef old fill:#f8d7da,stroke:#b02a37,color:#000
+    classDef active fill:#d1e7dd,stroke:#146c43,color:#000
+```
 * Checked every `log.retention.check.interval.ms` (5 min default; 10s in this lab).
 * Effective lifetime ≈ `retention.ms` + up to `segment.ms`/`segment.bytes` of the active segment.
 * `retention.bytes` is **per partition**: topic size ≈ retention.bytes × partitions × RF.
@@ -29,6 +40,21 @@ segments:  [0..16] [17..33] [34..50] [51..60 ACTIVE]
 before:  0:A=1 1:B=1 2:C=1 3:A=2 4:B=2 ... 12:A=5 13:B=5 14:C=5 15:B=∅(tombstone)
 after :  12:A=5 14:C=5 15:B=∅          ← latest per key, offsets keep their gaps
 later :  12:A=5 14:C=5                 ← tombstone dropped after delete.retention.ms
+```
+
+<!-- mermaid: before:  0:A=1 -->
+```mermaid
+flowchart TB
+    subgraph BEFORE["before compaction"]
+        b["0:A=1 1:B=1 2:C=1 3:A=2 4:B=2 ... 12:A=5 13:B=5 14:C=5 15:B=null (tombstone)"]
+    end
+    subgraph AFTER["after the cleaner runs"]
+        a["12:A=5 14:C=5 15:B=null<br/>latest value per key, offsets keep their gaps"]
+    end
+    subgraph LATER["after delete.retention.ms"]
+        l["12:A=5 14:C=5<br/>tombstone removed, key B is gone"]
+    end
+    BEFORE -- "log cleaner<br/>(min.cleanable.dirty.ratio)" --> AFTER -- "delete.retention.ms passes" --> LATER
 ```
 | Config | Default | Meaning |
 |---|---|---|

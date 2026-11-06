@@ -30,6 +30,27 @@ Topic "orders"  (logical)
  └── partition 2 ...
 ```
 
+<!-- mermaid: Topic "orders" -->
+```mermaid
+flowchart TB
+    T["Topic orders (logical)"] --> P0["partition 0<br/>replicas on brokers 1,2,3 (leader 1)"]
+    T --> P1["partition 1"]
+    T --> P2["partition 2"]
+    P0 --> DIR["/var/lib/kafka/data/orders-0/"]
+    subgraph SEG0["closed segment, base offset 0"]
+        LOG0["00000000000000000000.log<br/>records 0..16"]
+        IDX0["00000000000000000000.index<br/>offset to byte position (sparse)"]
+        TIX0["00000000000000000000.timeindex<br/>timestamp to offset (sparse)"]
+    end
+    subgraph SEG1["ACTIVE segment, base offset 17"]
+        LOG1["00000000000000000017.log<br/>only file being appended to"]
+        IDX1["...017.index / .timeindex"]
+    end
+    DIR --> SEG0
+    DIR --> SEG1
+    DIR --> META["leader-epoch-checkpoint<br/>partition.metadata"]
+```
+
 ### Record batch v2 (what `03_read_segment_in_python.py` decodes)
 ```
 baseOffset int64 | batchLength int32 | partitionLeaderEpoch int32 | magic int8 (=2) | crc uint32 |

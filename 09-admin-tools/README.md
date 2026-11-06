@@ -52,6 +52,25 @@ This lab's broker 1 has:
 listeners            = INTERNAL://0.0.0.0:29092, CONTROLLER://0.0.0.0:29093, EXTERNAL://0.0.0.0:9092
 advertised.listeners = INTERNAL://kafka1:29092,                           EXTERNAL://localhost:9092
 ```
+
+<!-- mermaid: listeners            = INTERNAL -->
+```mermaid
+flowchart LR
+    subgraph HOST["your laptop"]
+        PY["Python client"]
+    end
+    subgraph NET["docker network kafka-labs"]
+        CON["Connect / ksqlDB / Flink / exporters"]
+        subgraph K1["broker kafka1"]
+            EXT["EXTERNAL listener 0.0.0.0:9092<br/>advertised as localhost:9092"]
+            INT["INTERNAL listener 0.0.0.0:29092<br/>advertised as kafka1:29092"]
+            CTL["CONTROLLER listener :29093<br/>KRaft quorum only"]
+        end
+    end
+    PY -- "1. bootstrap localhost:9092" --> EXT
+    EXT -- "2. metadata: leaders are at localhost:9092/9093/9094" --> PY
+    CON -- "kafka1:29092" --> INT
+```
 * `listeners` = what the broker **binds** to. `advertised.listeners` = what the broker **tells clients** in metadata.
 * A client connects to the bootstrap address, gets metadata, then connects to the *advertised* address of each leader.
   If that address isn't reachable from the client (e.g. `kafka1:29092` from your Mac) → the famous "connects then hangs".

@@ -15,6 +15,15 @@
             ▼ faster, more isolated
 ```
 
+<!-- mermaid: slower, more realistic -->
+```mermaid
+flowchart BT
+    U["1. Unit tests + fakes/mocks<br/>test_01_unit_with_fakes.py<br/>pure Python, ms"]
+    M["2. librdkafka mock cluster<br/>test_02_mock_cluster.py<br/>no Docker, ms startup"]
+    T["3. Testcontainers (real Kafka)<br/>test_03_integration_testcontainers.py<br/>~10s startup per session"]
+    U -- "more realistic, slower" --> M -- "more realistic, slower" --> T
+```
+
 ## Files
 
 | File | What |

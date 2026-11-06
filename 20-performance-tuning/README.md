@@ -36,6 +36,22 @@ consumer: fetch (fetch.min.bytes / fetch.max.wait.ms / max.partition.fetch.bytes
           from page cache → decompress → deserialize → your code (usually the real bottleneck)
 ```
 
+<!-- mermaid: producer: serialize -->
+```mermaid
+flowchart LR
+    subgraph PROD["producer"]
+        p1[serialize] --> p2[partition] --> p3["batch<br/>linger.ms, batch.size"] --> p4[compress] --> p5["send<br/>max.in.flight"]
+    end
+    subgraph BROKER["broker"]
+        b1["network thread<br/>num.network.threads"] --> b2["request queue<br/>queued.max.requests"] --> b3["I/O thread<br/>num.io.threads<br/>append to page cache"] --> b4["wait for followers (acks=all)<br/>num.replica.fetchers"] --> b5[response queue] --> b6[network thread]
+    end
+    subgraph CONS["consumer"]
+        c1["fetch<br/>fetch.min.bytes, fetch.max.wait.ms,<br/>max.partition.fetch.bytes"] --> c2["zero-copy sendfile<br/>from page cache"] --> c3[decompress] --> c4[deserialize] --> c5["your code<br/>(usually the real bottleneck)"]
+    end
+    p5 -- network --> b1
+    b6 --> c1
+```
+
 ## Producer knobs (AKiA 6.2, DG ch. 3 "Configuring Producers")
 | Setting | Throughput ↑ | Latency / safety trade-off |
 |---|---|---|

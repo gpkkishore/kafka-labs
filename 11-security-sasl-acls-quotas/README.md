@@ -18,6 +18,24 @@ This folder runs its **own single-broker secured cluster** on `localhost:9192` s
    │                                 │ 3. Quota manager: bytes/s per user/client-id    -> delay response (throttle)
 ```
 
+<!-- mermaid: SASL_PLAINTEXT :9192 -->
+```mermaid
+sequenceDiagram
+    participant C as Client (alice)
+    participant K as kafka-secure :9192
+    C->>K: connect SASL_PLAINTEXT, sasl.username=alice
+    K->>K: 1. SASL/PLAIN: check password in JAAS file
+    K-->>C: authenticated as principal User:alice (or _AUTHENTICATION error)
+    C->>K: Produce / Fetch / JoinGroup request
+    K->>K: 2. StandardAuthorizer: ACL lookup for (User:alice, operation, resource)
+    alt ACL allows
+        K->>K: 3. Quota manager: bytes/s per user / client-id
+        K-->>C: response (delayed by throttle_time_ms if over quota)
+    else no matching ALLOW ACL
+        K-->>C: TOPIC_AUTHORIZATION_FAILED / GROUP_AUTHORIZATION_FAILED
+    end
+```
+
 ## Start / stop
 ```bash
 docker compose -f 11-security-sasl-acls-quotas/docker-compose.yml up -d     # ~20s until healthy

@@ -25,6 +25,23 @@
    │                                   │                                                 │
    │ value = 0x00 | 00 00 00 02 | avro-binary ──▶ Kafka topic sr_orders ──▶ read id=2 ──▶ GET /schemas/ids/2 (cached)
 ```
+
+<!-- mermaid: Schema Registry (REST :8081) -->
+```mermaid
+sequenceDiagram
+    participant P as Producer (AvroSerializer)
+    participant SR as Schema Registry :8081<br/>(stores schemas in topic _schemas)
+    participant K as Kafka topic sr_orders
+    participant C as Consumer (AvroDeserializer)
+    P->>SR: POST /subjects/sr_orders-value/versions (schema)
+    SR-->>P: id = 2 (cached by the client)
+    P->>K: value = 0x00 magic byte, 4-byte schema id 2, avro binary
+    C->>K: fetch
+    K-->>C: 0x00, id 2, avro binary
+    C->>SR: GET /schemas/ids/2 (only on first use, then cached)
+    SR-->>C: writer schema
+    Note over C: decode with writer schema,<br/>resolve to reader schema
+```
 * **Subject** = name a schema is versioned under. Default *TopicNameStrategy*: `<topic>-key`, `<topic>-value`.
   (RecordNameStrategy / TopicRecordNameStrategy allow several event types per topic.)
 * **Schema id** = globally unique; **version** = 1,2,3… per subject.

@@ -43,6 +43,24 @@
  cache sync   replica.*            (CDC table ⋈ click stream)
 ```
 
+<!-- mermaid: MySQL (binlog ROW, GTID) -->
+```mermaid
+flowchart TB
+    MY[("MySQL, binlog ROW + GTID<br/>inventory.customers / products / orders / outbox")]
+    MY -- "binlog via replication protocol<br/>(user debezium)" --> CC
+    subgraph CC["Connect cluster (from folder 15)"]
+        D1["inventory-cdc<br/>MySqlConnector"]
+        D2["outbox-cdc<br/>MySqlConnector + Outbox EventRouter SMT"]
+        S1["pg-replica-sink<br/>Debezium JdbcSinkConnector"]
+    end
+    D1 --> T1[["cdc.inventory.customers<br/>cdc.inventory.products<br/>cdc.inventory.orders"]]
+    D1 --> T2[["cdc (DDL events)<br/>_schema-history.inventory"]]
+    D2 --> T3[["outbox.event.Order"]]
+    T1 --> R["04 Redis cache sync"]
+    T1 --> S1 --> PG[("05 Postgres replica.*")]
+    T1 --> FL["17 Flink SQL joins<br/>CDC table with click stream"]
+```
+
 ## The change event (envelope)
 
 Key = primary key `{"id": 1}` ⇒ all changes of one row go to the **same partition, in order**.

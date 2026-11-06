@@ -23,6 +23,27 @@
                         └─ _connect_status   (RUNNING / PAUSED / FAILED per connector & task)
 ```
 
+<!-- mermaid: Connect cluster  (group.id -->
+```mermaid
+flowchart LR
+    MY[("MySQL shop")] --> CC
+    FS["data/*.txt"] --> CC
+    subgraph CC["Connect cluster (group.id = kafka-labs-connect)"]
+        W1["worker connect :8083<br/>JMX :7072"]
+        W2["worker connect-2 :8084"]
+        CN["connectors (logical jobs)<br/>split into tasks (threads)"]
+    end
+    CC --> PG[("Postgres warehouse")]
+    CC --> FO["data/*.txt"]
+    W1 -. metrics .-> PR["Prometheus"]
+    CC -- "all state lives in Kafka" --> ST
+    subgraph ST["internal topics"]
+        T1[["_connect_configs<br/>connector + task configs"]]
+        T2[["_connect_offsets<br/>file pos, last id, binlog pos"]]
+        T3[["_connect_status<br/>RUNNING / PAUSED / FAILED"]]
+    end
+```
+
 * **Worker**: a JVM process. Workers with the same `group.id` form a cluster and share the work. Stateless → any worker can run any task.
 * **Connector**: the config of a job ("copy table X to topic Y") + logic that splits it into tasks (`tasks.max`).
 * **Task**: does the actual copying. Source task = poll the system → produce. Sink task = consume → write the system (a sink is just a consumer group `connect-<name>`).

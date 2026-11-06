@@ -79,6 +79,32 @@ Now: Ctrl+C one of them (graceful), or find its pid (printed at start) and `kill
  members  ──Heartbeat (heartbeat.interval.ms)──▶ coordinator; reply "REBALANCE_IN_PROGRESS" triggers re-join
 ```
 
+<!-- mermaid: FindCoordinator -->
+```mermaid
+sequenceDiagram
+    autonumber
+    participant A as Consumer A (becomes group leader)
+    participant B as Consumer B
+    participant Br as Any broker
+    participant C as Group coordinator<br/>(leader of __consumer_offsets partition<br/>abs(hash(group.id)) % 50)
+    A->>Br: FindCoordinator(group)
+    Br-->>A: broker 2 is your coordinator
+    A->>C: JoinGroup
+    B->>C: JoinGroup
+    C-->>A: you are LEADER + member list
+    C-->>B: member id, generation
+    Note over A: leader computes the assignment on the CLIENT<br/>(range / roundrobin / cooperative-sticky)
+    A->>C: SyncGroup(assignment)
+    B->>C: SyncGroup()
+    C-->>A: your partitions
+    C-->>B: your partitions
+    loop every heartbeat.interval.ms
+        A->>C: Heartbeat
+        C-->>A: OK, or REBALANCE_IN_PROGRESS (re-join)
+    end
+    Note over C: no heartbeat for session.timeout.ms or no poll() for max.poll.interval.ms<br/>means the member is removed and a rebalance starts
+```
+
 ### What triggers a rebalance
 1. A member joins (new instance started).
 2. A member leaves gracefully (`close()` → `LeaveGroup`) — immediate.

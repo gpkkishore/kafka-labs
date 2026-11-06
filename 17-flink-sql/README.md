@@ -37,6 +37,28 @@
                                                          02_read_results.py / 03_read_committed_vs_uncommitted.py ◀── results
 ```
 
+<!-- mermaid: 01_clickstream_producer.py ──▶ -->
+```mermaid
+flowchart LR
+    PR["01_clickstream_producer.py"] --> CL[["kinaction_flink_clicks<br/>JSON, key=user"]]
+    MY[("MySQL")] -- "Debezium (16)" --> CP[["cdc.inventory.products<br/>debezium-json"]]
+    subgraph FLINK["Flink session cluster (UI :8085), checkpoints every 10s"]
+        J2["02 TUMBLE 10s per action"]
+        J3["03 HOP 30s/10s views per product"]
+        J4["04 clicks join products, revenue"]
+        J5["05 GROUP BY over CDC changelog"]
+        J6["06 exactly-once copy"]
+    end
+    CL --> J2 & J3 & J4 & J6
+    CP --> J4 & J5
+    J2 --> O2[["kinaction_flink_action_counts (append)"]]
+    J3 --> O3[["kinaction_flink_trending (append)"]]
+    J4 --> O4[["kinaction_flink_category_revenue (upsert)"]]
+    J5 --> O5[["kinaction_flink_inventory_value (upsert)"]]
+    J6 --> O6[["kinaction_flink_purchases_eos (transactional)"]]
+    O2 & O3 & O4 & O5 & O6 --> RD["02_read_results.py<br/>03_read_committed_vs_uncommitted.py"]
+```
+
 ## Start
 
 ```bash

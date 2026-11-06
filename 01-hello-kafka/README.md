@@ -22,6 +22,44 @@ source .venv/bin/activate   # created by `make venv`
                          └───────────────────────────────────────────────┘              └─ consumer C  ← P0, P1, P2
 ```
 
+<!-- mermaid: Kafka cluster -->
+```mermaid
+flowchart LR
+    P["Producer<br/>(key, value)"] -- produce --> L0 & L1 & L2
+    subgraph CL["Kafka cluster"]
+        direction TB
+        subgraph B1["kafka1"]
+            L0["P0 leader"]
+            F1a["P1 follower"]
+            F2a["P2 follower"]
+        end
+        subgraph B2["kafka2"]
+            F0b["P0 follower"]
+            L1["P1 leader"]
+            F2b["P2 follower"]
+        end
+        subgraph B3["kafka3"]
+            F0c["P0 follower"]
+            F1c["P1 follower"]
+            L2["P2 leader"]
+        end
+        CTRL{{"KRaft controller quorum<br/>(1 active)"}}
+    end
+    L0 -. replicate .-> F0b & F0c
+    L1 -. replicate .-> F1a & F1c
+    L2 -. replicate .-> F2a & F2b
+    subgraph G1["Consumer group billing"]
+        CA["consumer A<br/>P0, P1"]
+        CB["consumer B<br/>P2"]
+    end
+    subgraph G2["Consumer group audit"]
+        CC["consumer C<br/>P0, P1, P2"]
+    end
+    L0 & L1 -- fetch --> CA
+    L2 -- fetch --> CB
+    L0 & L1 & L2 -- fetch --> CC
+```
+
 | Term | What it really is |
 |------|-------------------|
 | **Topic** | A named *category* of records — logically one stream, physically split into partitions. |
